@@ -1,0 +1,206 @@
+{% extends 'core/base.html' %}
+{% load farma_filters %}
+{% load l10n %} {% block title %}Datos Brutos EFP{% endblock %}
+
+{% block content %}
+<style>
+    /* Estilo para el enlace punteado */
+    .text-decoration-underline-dotted {
+        text-decoration: underline dotted;
+        text-underline-offset: 3px;
+    }
+    
+    /* Contenedor relativo para posicionar el tooltip */
+    .competitor-cell {
+        position: relative;
+    }
+
+    /* ESTILOS DEL TOOLTIP (MEJORADOS) - IGUAL QUE EN CORE */
+    .competitor-tooltip {
+        visibility: hidden;
+        opacity: 0;
+        position: absolute;
+        
+        top: -10px; /* Alineación superior */
+        right: 100%; /* Sale a la izquierda */
+        transform: translateX(-10px);
+        
+        width: 420px; /* Un poco más ancho para nombres largos de EFP */
+        max-height: 400px; 
+        overflow-y: auto; /* Scroll vertical */
+        
+        background-color: #ffffff;
+        z-index: 9999;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        border: 1px solid rgba(0,0,0,0.1);
+        border-radius: 8px;
+        text-align: left;
+        
+        transition: all 0.2s cubic-bezier(0.165, 0.84, 0.44, 1);
+        pointer-events: none;
+    }
+
+    .competitor-cell:hover .competitor-tooltip {
+        visibility: visible;
+        opacity: 1;
+        transform: translateX(-5px);
+        pointer-events: auto;
+    }
+
+    .competitor-tooltip::after {
+        content: "";
+        position: absolute;
+        top: 20px;
+        left: 100%;
+        margin-top: -5px;
+        border-width: 6px;
+        border-style: solid;
+        border-color: transparent transparent transparent #ffffff;
+        filter: drop-shadow(2px 0 0 rgba(0,0,0,0.05));
+    }
+    
+    .last-no-border:last-child { border-bottom: none !important; margin-bottom: 0 !important; }
+    
+    .competitor-tooltip::-webkit-scrollbar { width: 6px; }
+    .competitor-tooltip::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px;}
+    .competitor-tooltip::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+</style>
+
+<div class="kpi-card">
+    <div class="table-responsive" style="overflow-x: visible;"> 
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>
+                        <a href="?order={% if current_order == 'nombre_grupo' %}-nombre_grupo{% else %}nombre_grupo{% endif %}" 
+                           class="text-dark text-decoration-none d-flex align-items-center justify-content-between">
+                            Grupo / Síntoma
+                            {% if 'nombre_grupo' in current_order %}
+                                <i class="fas fa-sort-{% if '-' in current_order %}down{% else %}up{% endif %} small"></i>
+                            {% else %} <i class="fas fa-sort text-muted opacity-25 small"></i> {% endif %}
+                        </a>
+                    </th>
+
+                    <th>Recomendado</th>
+
+                    <th style="width: 100px;">
+                        <a href="?order={% if current_order == 'pvp_medio' %}-pvp_medio{% else %}pvp_medio{% endif %}" 
+                           class="text-dark text-decoration-none d-flex align-items-center justify-content-between">
+                            PVP
+                            {% if 'pvp_medio' in current_order %}
+                                <i class="fas fa-sort-{% if '-' in current_order %}down{% else %}up{% endif %} small"></i>
+                            {% else %} <i class="fas fa-sort text-muted opacity-25 small"></i> {% endif %}
+                        </a>
+                    </th>
+
+                    <th style="width: 100px;">
+                        <a href="?order={% if current_order == 'margen_pct' %}-margen_pct{% else %}margen_pct{% endif %}" 
+                           class="text-dark text-decoration-none d-flex align-items-center justify-content-between">
+                            Margen
+                            {% if 'margen_pct' in current_order %}
+                                <i class="fas fa-sort-{% if '-' in current_order %}down{% else %}up{% endif %} small"></i>
+                            {% else %} <i class="fas fa-sort text-muted opacity-25 small"></i> {% endif %}
+                        </a>
+                    </th>
+                    
+                    <th>Competidores</th>
+                    
+                    <th class="text-end" style="width: 120px;">
+                        <a href="?order={% if current_order == 'ahorro_potencial' %}-ahorro_potencial{% else %}ahorro_potencial{% endif %}" 
+                           class="text-dark text-decoration-none d-flex align-items-center justify-content-end gap-2">
+                            Ahorro
+                            {% if 'ahorro_potencial' in current_order %}
+                                <i class="fas fa-sort-{% if '-' in current_order %}down{% else %}up{% endif %} small"></i>
+                            {% else %} <i class="fas fa-sort text-muted opacity-25 small"></i> {% endif %}
+                        </a>
+                    </th>
+                </tr>
+            </thead>
+            
+            <tbody>
+                {% for item in datos %}
+                <tr>
+                    <td class="fw-bold text-primary small">{{ item.nombre_grupo }}</td>
+                    
+                    <td>
+                        <div class="fw-bold text-dark">{{ item.producto_recomendado }}</div>
+                        <div class="d-flex align-items-center mt-1">
+                            <span class="badge bg-light text-secondary border" style="font-family: monospace; font-size: 0.75em;">
+                                <i class="fas fa-barcode me-1 opacity-50"></i>{{ item.codigo_nacional|default:"---" }}
+                            </span>
+                        </div>
+                    </td>
+                    
+                    <td>€{{ item.pvp_medio|floatformat:2 }}</td>
+                    
+                    <td>
+                        <span class="badge border
+                            {% if item.margen_pct >= 40 %}bg-success bg-opacity-10 text-success border-success border-opacity-25
+                            {% elif item.margen_pct >= 30 %}bg-warning bg-opacity-10 text-dark border-warning border-opacity-25
+                            {% else %}bg-danger bg-opacity-10 text-danger border-danger border-opacity-25{% endif %}">
+                            {{ item.margen_pct|floatformat:0 }}%
+                        </span>
+                    </td>
+                    
+                    <td>
+                        <div class="competitor-cell">
+                            <span class="text-muted small cursor-pointer text-decoration-underline-dotted" style="cursor: help;">
+                                Ver competidores
+                            </span>
+                            
+                            <div class="competitor-tooltip p-3">
+                                <h6 class="border-bottom pb-2 mb-2 text-dark small fw-bold text-uppercase">
+                                    <i class="fas fa-chart-pie me-1 text-primary"></i> Análisis de Mercado
+                                </h6>
+                                
+                                {% for comp in item.get_competidores_stats %}
+                                    {% if not comp.es_campeon %}
+                                    <div class="mb-3 pb-2 border-bottom last-no-border">
+                                        
+                                        <div class="d-flex justify-content-between align-items-start mb-1">
+                                            <div class="d-flex flex-column" style="max-width: 70%;">
+                                                <span class="fw-bold text-dark small lh-sm">{{ comp.nombre }}</span>
+                                                <div class="d-flex gap-2 mt-1 text-muted x-small font-monospace">
+                                                    <span>CN: {{ comp.cn|default:"---" }}</span>
+                                                    {% if comp.pvp %}<span>€{{ comp.pvp|floatformat:2 }}</span>{% endif %}
+                                                </div>
+                                            </div>
+                                            
+                                            <span class="badge border
+                                                {% if comp.margen >= 40 %}bg-success bg-opacity-10 text-success border-success border-opacity-25
+                                                {% elif comp.margen >= 30 %}bg-warning bg-opacity-10 text-dark border-warning border-opacity-25
+                                                {% else %}bg-danger bg-opacity-10 text-danger border-danger border-opacity-25{% endif %}" 
+                                                style="font-size: 0.7rem;">
+                                                {{ comp.margen|floatformat:0 }}% Mrg
+                                            </span>
+                                        </div>
+
+                                        <div class="d-flex align-items-center" style="height: 6px;">
+                                            <div class="flex-grow-1 bg-light rounded-pill overflow-hidden me-2 border h-100">
+                                                <div class="progress-bar 
+                                                    {% if comp.margen >= 40 %}bg-success
+                                                    {% elif comp.margen >= 30 %}bg-warning
+                                                    {% else %}bg-danger{% endif %}" 
+                                                    role="progressbar" 
+                                                    style="width: {{ comp.penet|unlocalize }}%; height: 100%;">
+                                                </div>
+                                            </div>
+                                            <div class="text-end x-small text-muted" style="min-width: 60px;">
+                                                {{ comp.penet|floatformat:1 }}% Cuota
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </td>
+                    
+                    <td class="text-end fw-bold text-success">€{{ item.ahorro_potencial|floatformat:0 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

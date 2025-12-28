@@ -1,0 +1,71 @@
+{% extends 'core/base_sin_sidebar.html' %} {% block content %}
+<div class="d-flex align-items-center justify-content-center min-vh-100" 
+     style="background: linear-gradient(135deg, #0e1117 0%, #1a202c 100%);">
+
+    <div class="card shadow-lg border-0 rounded-4 overflow-hidden" style="max-width: 900px; width: 90%;">
+        <div class="row g-0">
+            
+            <div class="col-lg-6 d-none d-lg-flex align-items-center justify-content-center p-5" 
+                 style="background: linear-gradient(135deg, #00C853 0%, #009688 100%);">
+                <div class="text-center text-white">
+                    <div class="mb-4">
+                        <i class="fas fa-pills fa-4x opacity-75"></i>
+                        <i class="fas fa-sync fa-2x mx-3 fa-spin opacity-50"></i>
+                        <i class="fas fa-chart-line fa-4x opacity-75"></i>
+                    </div>
+                    <h2 class="fw-bold mb-3">FarmaSwitch</h2>
+                    <p class="lead opacity-90">Inteligencia de datos para maximizar el margen de tu farmacia.</p>
+                    <div class="mt-4 badge bg-white text-success px-3 py-2 rounded-pill shadow-sm">
+                        v2.0 Enterprise
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6 bg-white p-5">
+                <div class="text-center mb-5">
+                    <h3 class="fw-bold text-dark">Bienvenido</h3>
+                    <p class="text-muted small">Introduce tus credenciales para acceder</p>
+                </div>
+
+                <form method="post" action="{% url 'login' %}">
+                    {% csrf_token %}
+                    
+                    {% if form.errors %}
+                    <div class="alert alert-danger py-2 small rounded-3 mb-4">
+                        <i class="fas fa-exclamation-circle me-2"></i> Usuario o contraseña incorrectos
+                    </div>
+                    {% endif %}
+
+                    <div class="form-floating mb-3">
+                        <input type="text" name="username" class="form-control bg-light border-0" id="id_username" placeholder="Usuario" required>
+                        <label for="id_username" class="text-muted"><i class="fas fa-user me-2"></i>Usuario</label>
+                    </div>
+
+                    <div class="form-floating mb-4">
+                        <input type="password" name="password" class="form-control bg-light border-0" id="id_password" placeholder="Contraseña" required>
+                        <label for="id_password" class="text-muted"><i class="fas fa-lock me-2"></i>Contraseña</label>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-dark btn-lg rounded-3 fw-bold shadow-sm hover-elevate">
+                            ACCEDER <i class="fas fa-arrow-right ms-2"></i>
+                        </button>
+                    </div>
+
+                    <div class="text-center mt-4">
+                        <a href="#" class="text-decoration-none text-muted small hover-underline">
+                            ¿Olvidaste tu contraseña? Contacta con soporte.
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .hover-elevate { transition: transform 0.2s; }
+    .hover-elevate:hover { transform: translateY(-2px); }
+    .hover-underline:hover { text-decoration: underline !important; color: #00C853 !important; }
+</style>
+{% endblock %}

@@ -1,0 +1,97 @@
+{% extends 'core/base.html' %}
+{% block title %}Importar Datos de Farmacia{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="kpi-card">
+            <h4 class="mb-4"><i class="fas fa-cloud-download-alt text-primary"></i> Sincronización con Databricks</h4>
+            
+            {% if mensaje %}
+                <div class="alert alert-{{ tipo_mensaje }} shadow-sm">
+                    {{ mensaje }}
+                </div>
+            {% endif %}
+
+            <form method="post" id="form-importar">
+                {% csrf_token %}
+                
+                <div class="mb-3">
+                    <label for="farmaciaInput" class="form-label fw-bold">Seleccionar Farmacia (Databricks)</label>
+                    
+                    <div class="input-group">
+                        <span class="input-group-text bg-white"><i class="fas fa-clinic-medical text-primary"></i></span>
+                        
+                        <select class="form-select" name="farmacia_input" id="farmaciaInput" required>
+                            <option value="{{ farmacia_activa }}" selected>{{ farmacia_activa }} (Actual)</option>
+                            
+                            {% if lista_farmacias %}
+                                <optgroup label="Disponibles en Databricks">
+                                    {% for farmacia in lista_farmacias %}
+                                        {% if farmacia != farmacia_activa %}
+                                            <option value="{{ farmacia }}">{{ farmacia }}</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                </optgroup>
+                            {% else %}
+                                <option disabled>No se encontraron farmacias en la nube...</option>
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div class="form-text text-muted">
+                        Estas son las farmacias detectadas en tu base de datos de 2024.
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Fecha Inicio</label>
+                        <input type="date" name="fecha_inicio" class="form-control" value="2024-01-01" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Fecha Fin</label>
+                        <input type="date" name="fecha_fin" class="form-control" value="2025-01-01" required>
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-primary btn-lg" id="btn-importar" onclick="mostrarLoader()">
+                        <i class="fas fa-sync-alt me-2"></i> Importar Datos
+                    </button>
+                    
+                    <div id="loading-spinner" class="text-center mt-3 d-none">
+                        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                        <h5 class="text-primary mt-3">Conectando con Databricks...</h5>
+                        <p class="text-muted">Esto puede tardar unos segundos.</p>
+                    </div>
+                </div>
+            </form>
+        </div>
+        
+        <div class="text-center mt-3 text-muted">
+            <small><i class="fas fa-lock"></i> Conexión segura vía Databricks SQL Connector</small>
+        </div>
+    </div>
+</div>
+<script>
+    function mostrarLoader() {
+        // 1. Obtenemos elementos
+        var btn = document.getElementById('btn-importar');
+        var spinner = document.getElementById('loading-spinner');
+        var form = document.querySelector('form'); // Busca el formulario padre
+
+        // 2. Validación básica HTML5 (si el form no es válido, no mostramos spinner)
+        if (form.checkValidity()) {
+            // Ocultamos botón y mostramos spinner
+            btn.classList.add('d-none');
+            spinner.classList.remove('d-none');
+            
+            // Forzamos el submit (por si acaso el botón era type="button", aunque aquí es submit)
+            // No es necesario submit() manual si el botón es type="submit", 
+            // pero el onclick ocurre justo antes.
+        }
+    }
+</script>
+{% endblock %}

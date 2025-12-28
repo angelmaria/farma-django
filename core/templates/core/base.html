@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FarmaSwitch</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --main-bg: #f8f9fa;
+            --nav-height: 70px;
+            
+            /* --- COLOR DINÁMICO --- */
+            /* Por defecto (si no se define) es verde */
+            --theme-color: #00C853; 
+            --theme-light: #e8f5e9;
+        }
+
+        /* LÓGICA DE COLOR SEGÚN SEGMENTO */
+        /* Si Django dice que es EFP, cambiamos las variables a AZUL/ÍNDIGO */
+        {% if segmento == 'EFP' %}
+        :root {
+            --theme-color: #3D5AFE; /* Un Azul Índigo moderno y profesional */
+            --theme-light: #E8EAF6; /* Fondo azul muy suave */
+        }
+        {% endif %}
+
+        body { 
+            background-color: var(--main-bg); 
+            font-family: 'Segoe UI', sans-serif; 
+            padding-top: var(--nav-height);
+        }
+        
+        /* NAVBAR ESTILO */
+        .navbar-custom {
+            background: white;
+            border-bottom: 1px solid #eef0f2;
+            height: var(--nav-height);
+            /* Línea superior de color para reforzar contexto */
+            border-top: 4px solid var(--theme-color); 
+        }
+        
+        .brand-box { 
+            background-color: var(--theme-color); /* Usa el color dinámico */
+            color: white; 
+            padding: 4px 8px; 
+            border-radius: 6px; 
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        /* ENLACES DEL MENÚ CENTRAL */
+        .nav-link-custom {
+            color: #555;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 20px;
+            transition: all 0.2s;
+            margin: 0 2px;
+            text-decoration: none;
+            font-size: 0.95rem;
+        }
+        .nav-link-custom:hover {
+            background-color: #f0f2f5;
+            color: var(--theme-color); /* Hover dinámico */
+        }
+        .nav-link-custom.active {
+            background-color: var(--theme-light); /* Fondo activo dinámico */
+            color: var(--theme-color);            /* Texto activo dinámico */
+            font-weight: 700;
+        }
+
+        /* SWITCHER DE CONTEXTO */
+        .context-switch {
+            background-color: #f1f3f4;
+            border-radius: 8px;
+            padding: 4px;
+            display: flex;
+            margin-left: 20px;
+        }
+        .context-btn {
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            text-decoration: none;
+            color: #666;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .context-btn.active {
+            background-color: white;
+            color: var(--theme-color); /* El botón activo toma el color del tema */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .context-btn:hover:not(.active) {
+            color: black;
+        }
+
+        /* ESTILOS COMUNES */
+        .list-card {
+            background: white; border-radius: 10px; padding: 15px 20px;
+            margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            border-left: 5px solid var(--theme-color); /* Borde de tarjeta dinámico */
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .rank-circle { width: 30px; height: 30px; background: #f0f2f5; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #555; margin-right: 15px; }
+        
+        .badge-margin { 
+            background-color: var(--theme-light); 
+            color: var(--theme-color); 
+            border-radius: 20px; padding: 5px 12px 5px 0px; display: block; font-size: 0.8rem; font-weight: bold; 
+        }
+
+        /* ESTILOS DEL TOOLTIP (Mantenidos) */
+        .tooltip-container { position: relative; cursor: help; transition: background-color 0.5s; }
+        .tooltip-container:hover { background-color: rgb(236 253 245); }
+        .tooltip-box { visibility: hidden; opacity: 0; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%) translateY(-10px); width: 440px; background-color: #343a40; color: #fff; padding: 15px; border-radius: 8px; z-index: 1050; box-shadow: 0 5px 15px rgba(0,0,0,0.3); transition: opacity 0.3s, transform 0.3s; pointer-events: none; }
+        .tooltip-box::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #343a40 transparent transparent transparent; }
+        .tooltip-container:hover .tooltip-box { visibility: visible; opacity: 1; transform: translateX(-50%) translateY(-5px); }
+        .list-card:nth-child(-n+2) .tooltip-box { bottom: auto; top: 100%; margin-top: 10px; transform: translateX(-50%) translateY(10px); }
+        .list-card:nth-child(-n+2):hover .tooltip-box { transform: translateX(-50%) translateY(5px); }
+        .list-card:nth-child(-n+2) .tooltip-box::after { top: auto; bottom: 100%; border-color: transparent transparent #343a40 transparent; }
+        .bar-chart-bg { background: rgba(255,255,255,0.2); height: 6px; width: 100%; border-radius: 3px; margin-top: 2px;}
+        .bar-chart-fill { height: 100%; border-radius: 3px; }
+
+        /* --- FLIPCARD 3D (EFECTO GIMNASIO) --- */
+        .flip-card {
+            background-color: transparent;
+            width: 100%;
+            height: 350px;
+            perspective: 1000px; /* Efecto de profundidad 3D */
+            cursor: pointer;
+        }
+
+        .flip-card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.8s;
+            transform-style: preserve-3d;
+        }
+
+        /* Esta clase se añade con JS al hacer click */
+        .flip-card.flipped .flip-card-inner {
+            transform: rotateY(180deg);
+        }
+
+        .flip-card-front, .flip-card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            -webkit-backface-visibility: hidden; /* Safari */
+            backface-visibility: hidden; /* Oculta la cara trasera */
+            border-radius: 15px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        /* Cara Frontal (Pregunta) - Rojo suave */
+        .flip-card-front {
+            background-color: #FFEBEE;
+            border: 2px dashed #EF5350;
+            color: black;
+        }
+        
+        /* Ajuste de texto para nombres largos */
+        .flip-card-front h1 {
+            font-size: clamp(1rem, 2.5vw, 2.5rem); 
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            hyphens: auto;
+        }
+
+        /* Cara Trasera (Respuesta) - Verde suave */
+        .flip-card-back {
+            background-color: #E8F5E9;
+            border: 2px solid #00C853;
+            color: black;
+            transform: rotateY(180deg); /* Ya está girada de inicio */
+        }
+        .text-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.2; /* Ajusta según tu tipografía */
+            max-height: 2.4em; /* line-height * line-clamp */
+        }
+
+        /* --- ANIMACIÓN PULSE (NUEVO GLOBAL) --- */
+        @keyframes pulse { 
+            0% { opacity: 0.6; } 
+            50% { opacity: 1; } 
+            100% { opacity: 0.6; } 
+        }
+        .animate-pulse { 
+            animation: pulse 2s infinite; 
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-expand-lg navbar-custom fixed-top shadow-sm">
+        <div class="container-fluid px-4">
+            
+            <div class="d-flex align-items-center">
+                <a class="text-decoration-none text-dark d-flex align-items-center me-3" href="#">
+                    <span class="brand-box">FS</span> 
+                    <span class="fw-bold h5 mb-0">FarmaSwitch</span>
+                </a>
+
+                <div class="context-switch d-none d-md-flex">
+                    <a href="{% url 'dashboard' %}" class="context-btn {% if segmento != 'EFP' %}active{% endif %}">
+                        <i class="fas fa-pills me-1"></i> Genéricos
+                    </a>
+                    <a href="{% url 'efp_dashboard' %}" class="context-btn {% if segmento == 'EFP' %}active{% endif %}">
+                        <i class="fas fa-heartbeat me-1"></i> Venta Libre
+                    </a>
+                </div>
+            </div>
+
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse justify-content-center" id="navbarNav">
+                <div class="navbar-nav">
+                    
+                    {% if segmento == 'EFP' %}
+                        <a href="{% url 'efp_dashboard' %}" class="nav-link-custom {% if active_tab == 'dashboard' %}active{% endif %}">
+                            <i class="fas fa-th-large me-1"></i> Dashboard
+                        </a>
+                        <a href="{% url 'efp_buscador' %}" class="nav-link-custom {% if active_tab == 'buscador' %}active{% endif %}">
+                            <i class="fas fa-search me-1"></i> Buscador
+                        </a>
+                        <a href="{% url 'efp_entrenamiento' %}" class="nav-link-custom {% if active_tab == 'entrenamiento' %}active{% endif %}">
+                            <i class="fas fa-dumbbell me-1"></i> Entrenar
+                        </a>
+                        <a href="{% url 'efp_examen' %}" class="nav-link-custom {% if active_tab == 'examen' %}active{% endif %}">
+                            <i class="fas fa-trophy me-1"></i> Reto
+                        </a>
+                        <a href="{% url 'efp_datos_brutos' %}" class="nav-link-custom {% if active_tab == 'datos_brutos' %}active{% endif %}">
+                            <i class="fas fa-database me-1"></i> Datos
+                        </a>
+                        <a href="{% url 'efp_configuracion' %}" class="nav-link-custom {% if active_tab == 'configuracion' %}active{% endif %}">
+                            <i class="fas fa-cogs me-1"></i> Config
+                        </a>
+                    {% else %}
+                        <a href="{% url 'dashboard' %}" class="nav-link-custom {% if active_tab == 'dashboard' %}active{% endif %}">
+                            <i class="fas fa-th-large me-1"></i> Dashboard
+                        </a>
+                        <a href="{% url 'buscador' %}" class="nav-link-custom {% if active_tab == 'buscador' %}active{% endif %}">
+                            <i class="fas fa-search me-1"></i> Buscador
+                        </a>
+                        <a href="{% url 'entrenamiento' %}" class="nav-link-custom {% if active_tab == 'entrenamiento' %}active{% endif %}">
+                            <i class="fas fa-dumbbell me-1"></i> Entrenar
+                        </a>
+                        <a href="{% url 'examen' %}" class="nav-link-custom {% if active_tab == 'examen' %}active{% endif %}">
+                            <i class="fas fa-trophy me-1"></i> Reto
+                        </a>
+                        <a href="{% url 'datos_brutos' %}" class="nav-link-custom {% if active_tab == 'datos_brutos' %}active{% endif %}">
+                            <i class="fas fa-database me-1"></i> Datos
+                        </a>
+                        <a href="{% url 'configuracion' %}" class="nav-link-custom {% if active_tab == 'configuracion' %}active{% endif %}">
+                            <i class="fas fa-cogs me-1"></i> Config
+                        </a>
+                    {% endif %}
+
+                    <a href="{% url 'importar' %}" class="nav-link-custom {% if active_tab == 'importar' %}active{% endif %}">
+                        <i class="fas fa-cloud-download-alt"></i>
+                    </a>
+                </div>
+            </div>
+
+            <div class="d-flex align-items-center">
+                
+                <form action="{% url 'cambiar_farmacia' %}" method="post" class="me-4 d-none d-lg-block">
+                    {% csrf_token %}
+                    <select name="farmacia_id" class="form-select form-select-sm border-0 bg-light fw-bold text-dark" 
+                            onchange="this.form.submit()" style="cursor: pointer;">
+                        {% if not farmacias_disponibles %}
+                            <option disabled selected>Sin datos</option>
+                        {% endif %}
+                        {% for fid in farmacias_disponibles %}
+                            <option value="{{ fid }}" {% if farmacia_activa == fid %}selected{% endif %}>
+                                🏥 {{ fid }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </form>
+
+                <div class="dropdown">
+                    <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle" id="userMenu" data-bs-toggle="dropdown">
+                        <div class="text-end me-2 d-none d-sm-block" style="line-height: 1.1;">
+                            <small class="d-block fw-bold text-dark">{{ user.username|title }}</small>
+                            <small class="d-block x-small text-muted" style="font-size: 0.65rem;">
+                                {% if user.is_superuser %}ADMIN{% else %}FARMACIA{% endif %}
+                            </small>
+                        </div>
+                        <div class="rounded-circle bg-light d-flex align-items-center justify-content-center text-secondary" style="width: 38px; height: 38px;">
+                            <i class="fas fa-user"></i>
+                        </div>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end border-0 shadow-lg mt-2">
+                        <li>
+                            <form action="{% url 'logout' %}" method="post" class="w-100">
+                                {% csrf_token %}
+                                <button type="submit" class="dropdown-item text-danger fw-bold py-2">
+                                    <i class="fas fa-sign-out-alt me-2"></i> Salir
+                                </button>
+                            </form>
+                        </li>
+                    </ul>
+                </div>
+
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-4 py-4">
+        {% block content %}{% endblock %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

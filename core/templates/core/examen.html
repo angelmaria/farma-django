@@ -1,0 +1,123 @@
+{% extends 'core/base.html' %}
+{% block title %}Examen de Sustitución{% endblock %}
+
+{% block content %}
+<div class="container mt-4" style="max-width: 800px;">
+
+    {% if finalizado %}
+    <div class="text-center py-5">
+        <div class="mb-4">
+            {% if score >= 70 %}
+                <i class="fas fa-trophy text-warning fa-5x mb-3"></i>
+            {% else %}
+                <i class="fas fa-clipboard-check text-primary fa-5x mb-3"></i>
+            {% endif %}
+            <h1 class="fw-bold">Examen Finalizado</h1>
+        </div>
+        
+        <div class="card shadow-sm p-4 mb-4">
+            <h3 class="text-muted">Tu Puntuación</h3>
+            <div class="display-1 fw-bold {% if score >= 50 %}text-success{% else %}text-danger{% endif %}">
+                {{ score|floatformat:0 }}%
+            </div>
+            <p class="lead mt-3">{{ feedback }}</p>
+            <p>Has acertado <strong>{{ aciertos }}</strong> de <strong>{{ total }}</strong> preguntas.</p>
+        </div>
+
+        <a href="?reset=true" class="btn btn-primary btn-lg px-5 rounded-pill shadow">
+            <i class="fas fa-redo me-2"></i> Intentar de nuevo
+        </a>
+    </div>
+
+    {% else %}
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="fas fa-gamepad text-primary"></i> Modo Reto</h3>
+        <div class="bg-white px-4 py-2 rounded shadow-sm border">
+            <span class="fw-bold text-success display-6">{{ aciertos }}</span>
+            <span class="text-muted">/ {{ total }}</span>
+            <a href="?reset=true" class="btn btn-sm btn-outline-danger ms-3" title="Reiniciar"><i class="fas fa-trash"></i></a>
+        </div>
+    </div>
+
+    {% if mensaje %}
+        <div class="alert {% if es_correcto %}alert-success{% else %}alert-danger{% endif %} text-center mb-4 shadow-sm" role="alert">
+            <h4 class="alert-heading">{% if es_correcto %}🎉 ¡Bien hecho!{% else %}❌ Vaya...{% endif %}</h4>
+            <p class="fs-5">{{ mensaje }}</p>
+            
+            {% if not es_correcto %}
+                <hr>
+                <div class="text-start d-inline-block">
+                    <p class="mb-1"><i class="fas fa-info-circle"></i> Análisis:</p>
+                    <ul class="mb-0">
+                        <li>El paciente pedía: <strong>{{ marca_ask }}</strong></li>
+                        <li>Tu elección: <span class="text-decoration-line-through">{{ seleccion_usuario }}</span></li>
+                        <li>Opción más rentable: <strong>{{ respuesta_correcta }}</strong> 🏆</li>
+                    </ul>
+                </div>
+            {% endif %}
+            
+            <div class="mt-4">
+                <div class="mt-4">
+                    <a href="." class="btn {% if es_correcto %}btn-success{% else %}btn-danger{% endif %} btn-lg px-5">
+                        Siguiente Pregunta <i class="fas fa-arrow-right ms-2"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    
+    {% else %}
+
+    <div class="card shadow-lg border-0">
+        <div class="card-header bg-dark text-white text-center py-4">
+            <h5 class="text-uppercase text-white-50 mb-2" style="font-size: 0.85rem; letter-spacing: 1px;">
+                El paciente trae una receta de:
+            </h5>
+            
+            <div class="d-flex align-items-center justify-content-center px-3" style="min-height: 60px;">
+                <h1 class="fw-bold mb-0" 
+                    style="font-size: clamp(1.1rem, 2.5vw, 2rem); line-height: 1.2;">
+                    {{ marca_ask }}
+                </h1>
+            </div>
+
+            <div class="badge bg-warning text-dark mt-3 fs-6 text-wrap">
+                {{ item.grupo_homogeneo }}
+            </div>
+        </div>
+        
+        <div class="card-body p-5 bg-light">
+            <p class="text-center text-muted mb-4">Selecciona la alternativa más rentable:</p>
+            
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="correcto" value="{{ respuesta_correcta }}">
+                
+                <div class="d-grid gap-3">
+                    {% for opcion in opciones %}
+                    <button type="submit" name="opcion" value="{{ opcion }}" 
+                            class="btn btn-outline-primary btn-lg py-3 text-start px-4 fw-bold shadow-sm transition-all position-relative">
+                        <span class="badge bg-primary me-3">{{ forloop.counter }}</span> 
+                        {{ opcion }}
+                    </button>
+                    {% endfor %}
+                </div>
+            </form>
+        </div>
+        <div class="card-footer text-muted text-center small">
+            <i class="fas fa-robot text-primary"></i> Recomendación basada en máximo margen económico actual.
+        </div>
+    </div>
+    {% endif %} {% endif %} </div>
+
+<style>
+    .transition-all { transition: all 0.2s; }
+    .transition-all:hover { 
+        transform: translateY(-3px); 
+        background-color: white !important; 
+        color: #0d6efd !important; 
+        border-color: #0d6efd; 
+        box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
+    }
+</style>
+{% endblock %}

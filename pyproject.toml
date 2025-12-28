@@ -1,0 +1,19 @@
+[project]
+name = "farma-django"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "django==5.2.9",
+    "python-dotenv==1.2.1",
+    "requests==2.32.5",
+    "pandas==2.2.3",
+    "openpyxl==3.1.5",
+    "pyarrow==22.0.0",
+    "numpy==2.3.5",
+    "databricks-sql-connector==4.2.2",
+    "pyjwt==2.10.1",
+    "oauthlib==3.3.1",
+    "pybreaker==1.4.1",
+    "gunicorn",
+    "whitenoise"
+]

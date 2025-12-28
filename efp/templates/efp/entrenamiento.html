@@ -1,0 +1,128 @@
+{% extends 'core/base.html' %}
+{% load farma_filters %}
+{% load humanize %}
+
+{% block title %}Entrenamiento EFP{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-center gap-3 mb-4">
+    <a href="{% url 'efp_dashboard' %}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+        <i class="fas fa-arrow-left me-2"></i>Dashboard
+    </a>
+    <a href="{% url 'efp_examen' %}" class="btn btn-outline-warning text-dark btn-sm rounded-pill px-3">
+        Ir a Modo Reto <i class="fas fa-trophy ms-2"></i>
+    </a>
+</div>
+
+<div class="container d-flex flex-column align-items-center mt-4 pb-5">
+    
+    <div class="flip-card mb-4" onclick="this.classList.toggle('flipped')" style="width: 500px; max-width: 95%; height: 650px; perspective: 1000px; cursor: pointer;">
+        <div class="flip-card-inner position-relative w-100 h-100 shadow-lg rounded-4" style="transition: transform 0.6s; transform-style: preserve-3d;">
+            
+            <div class="flip-card-front position-absolute w-100 h-100 bg-white rounded-4 d-flex flex-column align-items-center justify-content-center p-5 border" style="backface-visibility: hidden;">
+                <div class="text-uppercase text-primary fw-bold small mb-4 letter-spacing-2">CASO CLÍNICO</div>
+                
+                <div class="mb-4 p-4 bg-light rounded-circle text-primary bg-opacity-10">
+                    <i class="fas fa-user-injured fa-4x"></i>
+                </div>
+
+                <h2 class="fw-bold text-dark mb-4 px-3 lh-sm text-center">{{ item.nombre_grupo }}</h2>
+                
+                <div class="alert alert-light border rounded-pill px-4 py-2 mb-5 shadow-sm">
+                    <small class="text-muted fw-bold"><i class="fas fa-comment-medical me-2 text-success"></i>Paciente solicita consejo</small>
+                </div>
+                
+                <div class="mt-auto text-muted small animate-pulse">
+                    <i class="fas fa-hand-pointer me-1"></i> Toca para ver la recomendación
+                </div>
+            </div>
+
+            <div class="flip-card-back position-absolute w-100 h-100 bg-white rounded-4 d-flex flex-column text-start overflow-hidden border shadow-sm" style="backface-visibility: hidden; transform: rotateY(180deg); color: #333;">
+                
+                <div class="bg-success bg-opacity-10 p-3 border-bottom border-success border-opacity-25 h-50 d-flex flex-column justify-content-center align-items-center text-center position-relative">
+                    <div class="badge bg-success position-absolute top-0 end-0 m-3 shadow-sm">RECOMENDADO</div>
+                    
+                    <div class="bg-white p-2 rounded shadow-sm mb-2 d-flex align-items-center justify-content-center" style="width: 120px; height: 120px;">
+                        {% if item.codigo_nacional %}
+                            <img src="/media/efp_imagenes/{{ item.codigo_nacional }}.jpg" 
+                                 class="img-fluid" style="max-height: 100%; object-fit: contain;"
+                                 onerror="this.onerror=null; this.src='https://placehold.co/120x120/f8f9fa/adb5bd?text=Sin+Foto';">
+                        {% else %}
+                            <i class="fas fa-medkit fa-3x text-muted opacity-25"></i>
+                        {% endif %}
+                    </div>
+                    
+                    <h5 class="fw-bold text-dark lh-sm mb-1 px-3 text-clamp-2 w-100" title="{{ item.producto_recomendado }}" style="min-height: 2.4em;">
+                        {{ item.producto_recomendado }}
+                    </h5>
+                    
+                    <div class="d-flex gap-3 text-muted small font-monospace mt-1">
+                        <span>CN: {{ item.codigo_nacional|default:"---" }}</span>
+                        <span>PVP: €{{ item.pvp_medio|floatformat:2 }}</span>
+                    </div>
+                </div>
+
+                <div class="p-4 flex-grow-1 bg-light d-flex flex-column overflow-hidden">
+                    <small class="text-uppercase text-muted fw-bold mb-3 d-block x-small letter-spacing-1">Otras opciones en stock:</small>
+                    
+                    <div class="flex-grow-1 overflow-auto custom-scroll pe-2">
+                        <ul class="list-unstyled mb-0">
+                            {% for comp in item.get_competidores_stats %}
+                                {% if not comp.es_campeon %}
+                                <li class="bg-white p-2 rounded border mb-2 shadow-sm d-grid gap-2 align-items-center" style="grid-template-columns: auto 1fr auto;">
+                                    
+                                    <div class="flex-shrink-0 bg-light rounded d-flex align-items-center justify-content-center border" style="width: 40px; height: 40px; overflow: hidden;">
+                                        {% if comp.cn %}
+                                            <img src="/media/efp_imagenes/{{ comp.cn }}.jpg" class="img-fluid" style="height: 100%; object-fit: contain;"
+                                                 onerror="this.style.display='none'; this.parentElement.innerHTML='<i class=\'fas fa-pills text-muted opacity-25\'></i>'">
+                                        {% else %}
+                                            <i class="fas fa-pills text-muted opacity-25"></i>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <div class="overflow-hidden">
+                                        <div class="fw-bold text-dark small text-truncate" title="{{ comp.nombre }}">{{ comp.nombre }}</div>
+                                        <div class="text-muted x-small font-monospace">
+                                            {% if comp.cn %}CN: {{ comp.cn }}{% endif %}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="text-end lh-1">
+                                        <div class="text-danger fw-bold small">{{ comp.margen|floatformat:0 }}%</div>
+                                        <small class="text-muted x-small">Mrg</small>
+                                    </div>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <a href="." class="btn btn-primary btn-lg rounded-pill px-5 shadow-sm mt-3">
+        Siguiente Caso <i class="fas fa-arrow-right ms-2"></i>
+    </a>
+</div>
+
+<script>
+    function flipCard(card) { card.classList.toggle("flipped"); }
+</script>
+<style>
+    .letter-spacing-2 { letter-spacing: 2px; }
+    .letter-spacing-1 { letter-spacing: 1px; }
+    .custom-scroll::-webkit-scrollbar { width: 4px; }
+    .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
+    
+    /* Clase auxiliar para el clamping de texto */
+    .text-clamp-2 {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,237 @@
+{% extends 'core/base.html' %}
+{% load farma_filters %}
+{% load l10n %}
+{% load humanize %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<style>
+    /* --- ESTILOS VISUALES (KPIs y Tabla Limpia) --- */
+    .kpi-minimal { background: transparent; border: none; padding: 10px; }
+    .kpi-icon-box { width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; margin-right: 15px; }
+    .kpi-label { color: #6c757d; font-size: 0.9rem; margin-bottom: 2px; }
+    .kpi-number { font-size: 1.75rem; font-weight: 700; color: #2c3e50; line-height: 1.1; }
+    .kpi-sub { font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 4px; display: inline-block; margin-top: 4px; }
+    
+    .opportunity-row {
+        padding: 15px 0;
+        border-bottom: 1px solid #f0f2f5;
+        transition: background-color 0.2s;
+        position: relative; /* Necesario para que el tooltip se posicione respecto a la fila */
+        cursor: help; /* Indica que hay info extra */
+    }
+    .opportunity-row:hover { background-color: #f8f9fa; }
+    .opportunity-row:last-child { border-bottom: none; }
+    
+    .rank-badge { width: 30px; height: 30px; background-color: #f1f3f5; color: #adb5bd; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; margin-right: 15px; }
+    .margin-tag { color: #28a745; font-weight: 700; font-size: 0.85rem; background: rgba(40, 167, 69, 0.1); padding: 4px 8px; border-radius: 6px; }
+    /* -- dame un estilo similar a .margin-tag pero para color indigo -- */
+    .margin-tag-azul {     color: #ffffff !important; font-size: 0.85rem; background: rgb(13 110 253); padding: 4px 8px; border-radius: 6px;}
+
+    /* --- ESTILOS DEL TOOLTIP (POPUP) --- */
+    .tooltip-box {
+        visibility: hidden;
+        opacity: 0;
+        position: absolute;
+        bottom: 80%; /* Aparece encima de la fila */
+        left: 50%;
+        transform: translateX(-50%) translateY(10px);
+        width: 450px; /* Ancho del popup */
+        background-color: #ffffff;
+        color: #333;
+        text-align: left;
+        padding: 15px;
+        border-radius: 8px;
+        z-index: 1050;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        border: 1px solid rgba(0,0,0,0.05);
+        transition: all 0.2s ease-in-out;
+        pointer-events: none;
+    }
+
+    /* Mostrar al hacer Hover */
+    .opportunity-row:hover .tooltip-box {
+        visibility: visible;
+        opacity: 1;
+        transform: translateX(-50%) translateY(-10px);
+    }
+
+    /* Lógica de inversión (Para las primeras 2 filas, el tooltip sale ABAJO para no cortarse) */
+    .opportunity-row:nth-child(-n+2) .tooltip-box {
+        bottom: auto;
+        top: 80%;
+        transform: translateX(-50%) translateY(-10px);
+    }
+    .opportunity-row:nth-child(-n+2):hover .tooltip-box {
+        transform: translateX(-50%) translateY(10px);
+    }
+</style>
+
+<div class="row mb-5 bg-white py-4 rounded-3 shadow-sm mx-1">
+    <div class="col-md-4 border-end">
+        <div class="d-flex align-items-center px-3">
+            <div class="kpi-icon-box text-success"><i class="fas fa-piggy-bank fa-3x"></i></div>
+            <div>
+                <div class="kpi-label">Ahorro Anual Estimado</div>
+                <div class="kpi-number">€{{ total_ahorro|euros }}</div>
+                <div class="kpi-sub bg-light text-muted">~€{{ ahorro_mensual|euros }}/mes</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 border-end">
+        <div class="d-flex align-items-center px-3">
+            <div class="kpi-icon-box text-primary"><i class="fas fa-first-aid fa-3x"></i></div>
+            <div>
+                <div class="kpi-label">Grupos Homogéneos</div>
+                <div class="kpi-number">{{ total_grupos }}</div>
+                <a href="#" class="text-decoration-none small text-primary fw-bold">Ver Oportunidades activas</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="d-flex align-items-center px-3">
+            <div class="kpi-icon-box text-warning"><i class="fas fa-exclamation-triangle fa-3x"></i></div>
+            <div>
+                <div class="kpi-label">Marcas a Sustituir</div>
+                <div class="kpi-number">{{ total_marcas }}</div>
+                <div class="text-warning small fw-bold">Identificadas en stock</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mb-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0">Top 5 Oportunidades de Cambio</h5>
+                <a href="{% url 'datos_brutos' %}" class="text-decoration-none small text-success fw-bold margin-tag-azul">Ver todo</a>
+            </div>
+            <div class="card-body pt-0">
+                {% for item in top_5 %}
+                <div class="opportunity-row d-flex align-items-center justify-content-between">
+                    
+                    <div class="d-flex align-items-center flex-grow-1" style="max-width: 70%;">
+                        <div class="rank-badge">{{ forloop.counter }}</div>
+                        <div class="ps-2 overflow-hidden flex-grow-1">
+                            <div class="text-secondary mb-1" style="font-size: 0.9rem; font-weight: 500; line-height: 1.2;">
+                                <span class="text-muted small text-uppercase" style="font-size: 0.75em;">A.H.</span> {{ item.grupo_homogeneo }}
+                            </div>
+
+                            <div class="text-muted small">
+                                <span class="me-1" style="font-size: 0.85em;">Rec:</span>
+                                <span class="text-dark fw-bold">{{ item.producto_recomendado }}</span>
+                                
+                                <span class="badge bg-white text-secondary border ms-2 align-middle" 
+                                    style="font-family: monospace; font-size: 0.75em; letter-spacing: 0.5px;"
+                                    title="Código Nacional">
+                                    CN: {{ item.codigo_nacional|default:"---" }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-end ps-3">
+                        <div class="fw-bold text-dark fs-5">€{{ item.ahorro_potencial|euros }}</div>
+                        <div class="margin-tag d-inline-block">
+                            +{{ item.margen_pct|floatformat:2 }}% Margen
+                        </div>
+                    </div>
+
+                    <div class="tooltip-box">
+                        <h6 class="border-bottom pb-2 mb-2 fw-bold text-muted small">ANÁLISIS DE COMPETENCIA</h6>
+                        
+                        {% for comp in item.get_competidores_stats %}
+                            {% if not comp.es_campeon %}
+                            <div class="mb-2 border-bottom pb-2 p-2 rounded {% if comp.nombre == item.producto_recomendado %}bg-success bg-opacity-10 border-start border-success border-3{% endif %}">
+                                
+                                <div class="d-flex justify-content-between align-items-start mb-1">
+                                    <div class="d-flex flex-column" style="max-width: 65%;">
+                                        <span class="fw-bold text-dark small text-truncate" title="{{ comp.nombre }}">
+                                            {% if comp.nombre == item.producto_recomendado %}
+                                                <i class="fas fa-star text-warning me-1"></i>
+                                            {% endif %}
+                                            {{ comp.nombre }}
+                                        </span>
+                                        <span class="text-muted x-small" style="font-family: monospace; font-size: 0.7rem;">
+                                            CN: {{ comp.cn|default:"---" }}
+                                        </span>
+                                    </div>
+
+                                    <span class="badge border bg-light text-dark small">
+                                        {{ comp.margen|floatformat:0 }}% Mrg
+                                    </span>
+                                </div>
+
+                                <div class="d-flex align-items-center" style="height: 6px;">
+                                    <div class="flex-grow-1 bg-light rounded-pill overflow-hidden me-2 border" style="height: 100%;">
+                                        <div class="progress-bar 
+                                            {% if comp.nombre == item.producto_recomendado %}bg-success
+                                            {% elif comp.margen >= 40 %}bg-success
+                                            {% elif comp.margen >= 30 %}bg-warning
+                                            {% else %}bg-danger{% endif %}" 
+                                            role="progressbar" 
+                                            style="width: {{ comp.penet }}%; min-width: 4px; height: 100%;">
+                                        </div>
+                                    </div>
+                                    <span class="text-muted x-small" style="font-size: 0.7rem; min-width: 35px; text-align: right;">
+                                        {{ comp.penet|floatformat:1 }}%
+                                    </span>
+                                </div>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        <div class="text-center mt-2">
+                            <small class="text-muted fst-italic">Datos basados en rotación actual</small>
+                        </div>
+                    </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4 mb-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white border-0 py-3">
+                <h5 class="fw-bold mb-0">Distribución de Margen</h5>
+            </div>
+            <div class="card-body d-flex flex-column justify-content-center align-items-center">
+                <div style="width: 100%; max-width: 280px; position: relative;">
+                    <canvas id="marginChart"></canvas>
+                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; pointer-events: none;">
+                        <span class="text-muted small">Total Ref.</span><br>
+                        <span class="fw-bold fs-4">{{ total_marcas }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const ctx = document.getElementById('marginChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['0-30%', '30-50%', '50-70%', '>70%'],
+            datasets: [{
+                data: [15, 25, 45, 15],
+                backgroundColor: ['#EF5350', '#FFA726', '#26A69A', '#66BB6A'],
+                borderWidth: 0,
+                hoverOffset: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            cutout: '75%',
+            plugins: {
+                legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20, font: { size: 11 } } },
+                tooltip: { backgroundColor: '#343a40', padding: 12, cornerRadius: 8 }
+            }
+        }
+    });
+</script>
+{% endblock %}

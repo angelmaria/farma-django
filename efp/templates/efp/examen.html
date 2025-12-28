@@ -1,0 +1,134 @@
+{% extends 'core/base.html' %}
+{% load farma_filters %}
+{% block title %}Reto EFP{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-center gap-3 mb-4">
+    <a href="{% url 'efp_dashboard' %}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+        <i class="fas fa-arrow-left me-2"></i>Dashboard
+    </a>
+    <a href="{% url 'efp_entrenamiento' %}" class="btn btn-outline-primary btn-sm rounded-pill px-3">
+        Ir a Entrenamiento <i class="fas fa-dumbbell ms-2"></i>
+    </a>
+</div>
+
+<div class="container mt-4" style="max-width: 800px;">
+
+    {% if error %}
+        <div class="alert alert-warning text-center">{{ error }}</div>
+    {% elif finalizado %}
+        <div class="text-center py-5">
+            <i class="fas fa-award text-warning fa-5x mb-3"></i>
+            <h1>¡Reto Completado!</h1>
+            <div class="display-1 fw-bold text-primary">{{ score|floatformat:0 }}%</div>
+            <p class="lead">{{ feedback }}</p>
+            <div class="mt-4">
+                <p>Aciertos: {{ aciertos }} / {{ total }}</p>
+            </div>
+            <a href="?reset=true" class="btn btn-primary rounded-pill mt-3 px-5">Repetir Test</a>
+        </div>
+    {% else %}
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="fw-bold m-0 text-muted">Pregunta {{ total_jugado|add:"1" }} <span class="fs-6 fw-normal">/ {{ total_max }}</span></h4>
+            <div class="badge bg-success fs-6">Aciertos: {{ aciertos }}</div>
+        </div>
+        
+        <div class="progress mb-4" style="height: 8px;">
+            <div class="progress-bar bg-primary" role="progressbar" style="width: {% widthratio total_jugado total_max 100 %}%"></div>
+        </div>
+
+        <div class="card shadow-lg border-0 overflow-hidden">
+            <div class="card-header bg-dark text-white text-center py-4">
+                <p class="text-uppercase text-white-50 mb-1 small"><i class="fas fa-user-md me-2"></i>El paciente solicita algo para:</p>
+                <h2 class="fw-bold mb-0">{{ pregunta.pregunta_texto }}</h2>
+            </div>
+
+            <div class="card-body p-4 p-md-5 bg-light">
+                
+               <div class="card-body p-4 p-md-5 bg-light">
+                
+                <form method="post" class="d-grid gap-3">
+                    {% csrf_token %}
+                    
+                    {% for op in pregunta.opciones %}
+                        <button type="submit" name="opcion" value="{{ op.nombre }}" 
+                            class="btn w-100 p-0 text-start border shadow-sm hover-shadow bg-white overflow-hidden position-relative h-100
+                            {% if mostrar_feedback %}
+                                {% if op.nombre == pregunta.producto_correcto %}border-success border-3{% elif op.nombre == seleccion_usuario %}border-danger border-3{% endif %}
+                            {% endif %}"
+                            {% if mostrar_feedback %}disabled{% endif %}>
+                        
+                        <div class="d-flex align-items-start p-3 h-100">
+                            <div class="flex-shrink-0 me-3 bg-light rounded d-flex align-items-center justify-content-center p-1 border" style="width: 60px; height: 60px;">
+                                {% if op.cn %}
+                                    <img src="/media/efp_imagenes/{{ op.cn }}.jpg" class="img-fluid" style="max-height: 100%;"
+                                        onerror="this.src='https://placehold.co/60x60/f8f9fa/adb5bd?text=IMG'">
+                                {% else %}
+                                    <i class="fas fa-pills text-muted opacity-25"></i>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="flex-grow-1 overflow-hidden d-flex flex-column justify-content-between" style="min-height: 60px;">
+                                <div class="fw-bold text-dark mb-1 text-clamp-2" title="{{ op.nombre }}">
+                                    {{ op.nombre }}
+                                </div>
+                                <div class="d-flex gap-3 text-muted small font-monospace mt-auto">
+                                    {% if op.cn %}
+                                        <span class="text-truncate"><i class="fas fa-barcode me-1"></i>{{ op.cn }}</span>
+                                    {% else %}
+                                        <span class="text-muted opacity-50"><i class="fas fa-barcode me-1"></i>---</span>
+                                    {% endif %}
+                                    
+                                    {% if op.pvp %}
+                                        <span class="text-nowrap"><i class="fas fa-tag me-1"></i>€{{ op.pvp|floatformat:2 }}</span>
+                                    {% else %}
+                                        <span class="text-muted opacity-50"><i class="fas fa-tag me-1"></i>€---</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            {% if mostrar_feedback %}
+                                <div class="align-self-center ms-2">
+                                    {% if op.nombre == pregunta.producto_correcto %}
+                                        <div class="text-success fs-3"><i class="fas fa-check-circle"></i></div>
+                                    {% elif op.nombre == seleccion_usuario %}
+                                        <div class="text-danger fs-3"><i class="fas fa-times-circle"></i></div>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </button>
+                    {% endfor %}
+
+                    {% if mostrar_feedback %}
+                        <div class="mt-4 pt-3 border-top">
+                            <div class="alert {% if es_correcto %}alert-success{% else %}alert-danger{% endif %} mb-3">
+                                <i class="fas {% if es_correcto %}fa-check{% else %}fa-info-circle{% endif %} me-2"></i>
+                                {{ mensaje }}
+                            </div>
+                            <div class="text-end">
+                                <button type="submit" name="siguiente_pregunta" value="true" class="btn btn-primary btn-lg px-5 shadow">
+                                    Siguiente Paciente <i class="fas fa-arrow-right ms-2"></i>
+                                </button>
+                            </div>
+                        </div>
+                    {% endif %}
+                </form>
+
+            </div> 
+
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<style>
+    .hover-shadow:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
+        border-color: #0d6efd !important;
+        color: #0d6efd !important;
+    }
+    .hover-shadow { transition: all 0.2s; }
+</style>
+{% endblock %}

@@ -1,0 +1,8 @@
+# ignore sensitive and unnecessary files .env, etc
+.env
+__pycache__/
+*.pyc
+db.sqlite3
+# ignore entorno virtual .venv
+.venv/
+.DS_Store
