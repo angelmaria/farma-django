@@ -2,11 +2,9 @@
 import os
 import json
 import random
-import re
 from django.conf import settings
-from databricks import sql
-from django.db import transaction
 from .models import OportunidadEFP
+from core.db_utils import databricks_connection, bulk_create_or_update, parse_percentage_string
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -113,15 +111,19 @@ def cargar_jerarquia_local():
     return mapa_final
 
 def sincronizar_efp_desde_databricks(farmacia_id, fecha_inicio, fecha_fin):
+    """
+    Sincroniza oportunidades de EFP desde Databricks para una farmacia específica.
+    
+    Args:
+        farmacia_id (str): ID de la farmacia
+        fecha_inicio (str): Fecha inicio en formato 'YYYY-MM-DD'
+        fecha_fin (str): Fecha fin en formato 'YYYY-MM-DD'
+    
+    Returns:
+        tuple: (num_registros, error_message)
+    """
     try:
         mapa_jerarquia = cargar_jerarquia_local()
-
-        connection = sql.connect(
-            server_hostname=os.getenv("DATABRICKS_SERVER_HOSTNAME"),
-            http_path=os.getenv("DATABRICKS_HTTP_PATH"),
-            access_token=os.getenv("DATABRICKS_TOKEN")
-        )
-        cursor = connection.cursor()
 
         query = f"""
         WITH Base_EFP AS (
@@ -133,13 +135,10 @@ def sincronizar_efp_desde_databricks(farmacia_id, fecha_inicio, fecha_fin):
                 SUM(bd.Cantidad) as Unidades,
                 SUM(bd.ImporteBruto) as Venta_Total,
                 
-                -- CORRECCIÓN 1: Usamos MAX(bd.PVP) para obtener el precio de catálogo real
                 MAX(bd.PVP) as PVP_Medio_Real,
                 
-                -- Margen Unitario en Euros: (Venta - Coste) / Unidades
                 ((SUM(bd.ImporteBruto) - SUM(COALESCE(bd.ImporteCoste, 0))) / NULLIF(SUM(bd.Cantidad),0)) as Margen_Unit_Eur,
                 
-                -- Margen %: (Venta - Coste) / Venta * 100
                 CASE WHEN SUM(bd.ImporteBruto) > 0 THEN
                     ((SUM(bd.ImporteBruto) - SUM(COALESCE(bd.ImporteCoste, 0))) / SUM(bd.ImporteBruto)) * 100
                 ELSE 0 END as Margen_Pct,
@@ -162,19 +161,17 @@ def sincronizar_efp_desde_databricks(farmacia_id, fecha_inicio, fecha_fin):
                 *,
                 ROW_NUMBER() OVER (PARTITION BY Id_Agrupacion ORDER BY Margen_Unit_Eur DESC) as Ranking,
                 MAX(Margen_Unit_Eur) OVER (PARTITION BY Id_Agrupacion) as Mejor_Margen_Eur,
-                -- Cálculo de cuota de mercado por agrupación
                 (Unidades * 100.0) / SUM(Unidades) OVER (PARTITION BY Id_Agrupacion) as Cuota_Mercado
             FROM Base_EFP
         )
         SELECT 
             Id_Agrupacion,
             MAX(Nombre_Grupo_EFP),
-            MAX(CASE WHEN Ranking = 1 THEN Nombre_Producto END), -- Producto Recomendado
-            MAX(CASE WHEN Ranking = 1 THEN PVP_Medio_Real END),  -- PVP del Recomendado
-            MAX(CASE WHEN Ranking = 1 THEN Margen_Pct END),      -- Margen del Recomendado
-            SUM(Unidades * (Mejor_Margen_Eur - Margen_Unit_Eur)), -- Ahorro Potencial Total
+            MAX(CASE WHEN Ranking = 1 THEN Nombre_Producto END),
+            MAX(CASE WHEN Ranking = 1 THEN PVP_Medio_Real END),
+            MAX(CASE WHEN Ranking = 1 THEN Margen_Pct END),
+            SUM(Unidades * (Mejor_Margen_Eur - Margen_Unit_Eur)),
             
-            -- LISTA SUSTITUIBLES CON CN Y PVP
             array_join(collect_list(
                 CASE 
                     WHEN Ranking > 1 
@@ -185,13 +182,13 @@ def sincronizar_efp_desde_databricks(farmacia_id, fecha_inicio, fecha_fin):
                         CAST(CAST(ROUND(coalesce(Margen_Pct, 0), 0) AS INT) AS STRING), '###',
                         CAST(CAST(ROUND(coalesce(Cuota_Mercado, 0), 1) AS DECIMAL(10,1)) AS STRING), '###',
                         CAST(IdArticu AS STRING), '###', 
-                        CAST(CAST(coalesce(PVP_Medio_Real, 0) AS DECIMAL(10,2)) AS STRING), -- AÑADIDO PVP
+                        CAST(CAST(coalesce(PVP_Medio_Real, 0) AS DECIMAL(10,2)) AS STRING),
                         ')'
                     ) 
                 END
             ), ' || '),
             
-            MAX(CASE WHEN Ranking = 1 THEN IdArticu END) -- CN del Producto Recomendado
+            MAX(CASE WHEN Ranking = 1 THEN IdArticu END)
 
         FROM Ranked
         GROUP BY Id_Agrupacion
@@ -199,40 +196,36 @@ def sincronizar_efp_desde_databricks(farmacia_id, fecha_inicio, fecha_fin):
         ORDER BY SUM(Unidades * (Mejor_Margen_Eur - Margen_Unit_Eur)) DESC
         """
         
-        cursor.execute(query)
-        rows = cursor.fetchall()
-        cursor.close()
-        connection.close()
+        with databricks_connection() as (connection, cursor):
+            cursor.execute(query)
+            rows = cursor.fetchall()
 
-        with transaction.atomic():
-            OportunidadEFP.objects.filter(farmacia_id=farmacia_id).delete()
-            objs = []
-            
-            for row in rows:
-                id_g = int(row[0])
-                if id_g in mapa_jerarquia:
-                    fam, nombre_bonito = mapa_jerarquia[id_g]
-                    subfam = nombre_bonito
-                else:
-                    fam = "OTRAS"
-                    subfam = row[1] or "Desconocido"
+        objs = []
+        for row in rows:
+            id_g = int(row[0])
+            if id_g in mapa_jerarquia:
+                fam, nombre_bonito = mapa_jerarquia[id_g]
+                subfam = nombre_bonito
+            else:
+                fam = "OTRAS"
+                subfam = row[1] or "Desconocido"
 
-                objs.append(OportunidadEFP(
-                    farmacia_id=farmacia_id,
-                    id_agrupacion=int(row[0]),
-                    nombre_grupo=subfam,
-                    familia=fam,
-                    subfamilia=subfam,
-                    producto_recomendado=row[2],
-                    pvp_medio=float(row[3] or 0),
-                    margen_pct=float(row[4] or 0),
-                    ahorro_potencial=float(row[5] or 0),
-                    a_sustituir=row[6] or "",
-                    codigo_nacional=str(row[7]) if row[7] else ""
-                ))
-            OportunidadEFP.objects.bulk_create(objs)
-            
-        return len(objs), None
+            objs.append(OportunidadEFP(
+                farmacia_id=farmacia_id,
+                id_agrupacion=int(row[0]),
+                nombre_grupo=subfam,
+                familia=fam,
+                subfamilia=subfam,
+                producto_recomendado=row[2],
+                pvp_medio=float(row[3] or 0),
+                margen_pct=float(row[4] or 0),
+                ahorro_potencial=float(row[5] or 0),
+                a_sustituir=row[6] or "",
+                codigo_nacional=str(row[7]) if row[7] else ""
+            ))
+        
+        num_created = bulk_create_or_update(OportunidadEFP, farmacia_id, objs)
+        return num_created, None
 
     except Exception as e:
         return 0, str(e)

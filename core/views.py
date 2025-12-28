@@ -159,10 +159,13 @@ def entrenamiento(request):
 
     item = items_qs.order_by('?').first()
     
-    # Lógica de Preferencia (Filtrar también por farmacia si quisieras preferencias por farmacia, 
-    # por ahora asumimos preferencias globales o tendrás que añadir farmacia_id a Preferencia)
+    # Lógica de Preferencia filtrada por farmacia
     try:
-        pref = Preferencia.objects.get(grupo_homogeneo=item.grupo_homogeneo, activo=True)
+        pref = Preferencia.objects.get(
+            grupo_homogeneo=item.grupo_homogeneo, 
+            farmacia_id=f_id,
+            activo=True
+        )
         producto_final = f"{pref.laboratorio_preferente} (Preferencia)"
         es_preferencia = True
     except Preferencia.DoesNotExist:
@@ -259,7 +262,11 @@ def examen(request):
 
         # Determinamos la respuesta correcta (Preferencia o Recomendado)
         try:
-            pref = Preferencia.objects.get(grupo_homogeneo=posible_item.grupo_homogeneo, activo=True)
+            pref = Preferencia.objects.get(
+                grupo_homogeneo=posible_item.grupo_homogeneo,
+                farmacia_id=f_id,
+                activo=True
+            )
             respuesta_correcta = pref.laboratorio_preferente
             origen = "Preferencia"
         except Preferencia.DoesNotExist:
@@ -321,10 +328,10 @@ def configuracion(request):
     # 1. Obtenemos datos
     oportunidades = Oportunidad.objects.filter(farmacia_id=f_id).order_by('grupo_homogeneo')
     
-    # 2. Diccionario de preferencias existentes
+    # 2. Diccionario de preferencias existentes (filtrado por farmacia)
     preferencias_dict = {
         p.grupo_homogeneo: p 
-        for p in Preferencia.objects.filter(activo=True)
+        for p in Preferencia.objects.filter(farmacia_id=f_id, activo=True)
     }
 
     # 3. Guardado (POST)
@@ -336,6 +343,7 @@ def configuracion(request):
         if grupo and producto_elegido:
             Preferencia.objects.update_or_create(
                 grupo_homogeneo=grupo,
+                farmacia_id=f_id,
                 defaults={'laboratorio_preferente': producto_elegido, 'activo': is_active}
             )
             return redirect('configuracion')
@@ -401,11 +409,6 @@ def importar(request):
         if not error_cloud:
             request.session['lista_farmacias_cloud'] = lista_farmacias_cloud
     # ----------------------------------------
-    mensaje = None
-    tipo_mensaje = ""
-    
-    # 1. AHORA SÍ LLAMAMOS A LA FUNCIÓN REAL
-    lista_farmacias_cloud, error_cloud = obtener_farmacias_cloud()
     
     mensaje = None
     tipo_mensaje = ""

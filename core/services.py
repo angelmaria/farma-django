@@ -1,21 +1,24 @@
 import os
-from databricks import sql
 from django.db import transaction
 from .models import Oportunidad
+from .db_utils import databricks_connection, bulk_create_or_update, get_farmacias_activas, parse_percentage_string, parse_currency_string
 from dotenv import load_dotenv
 
 load_dotenv()
 
 def sincronizar_desde_databricks(farmacia_id, fecha_inicio, fecha_fin):
+    """
+    Sincroniza oportunidades de AH desde Databricks para una farmacia específica.
+    
+    Args:
+        farmacia_id (str): ID de la farmacia
+        fecha_inicio (str): Fecha inicio en formato 'YYYY-MM-DD'
+        fecha_fin (str): Fecha fin en formato 'YYYY-MM-DD'
+    
+    Returns:
+        tuple: (num_registros, error_message)
+    """
     try:
-        connection = sql.connect(
-            server_hostname=os.getenv("DATABRICKS_SERVER_HOSTNAME"),
-            http_path=os.getenv("DATABRICKS_HTTP_PATH"),
-            access_token=os.getenv("DATABRICKS_TOKEN")
-        )
-        cursor = connection.cursor()
-
-        # QUERY: Añadimos IdArticu (CN) al string de competidores
         query = f"""
         WITH Base AS (
             SELECT 
@@ -62,7 +65,6 @@ def sincronizar_desde_databricks(farmacia_id, fecha_inicio, fecha_fin):
             concat(format_number(MAX(CASE WHEN Ranking = 1 THEN Margen_Pct END), 2), '%'),
             concat(format_number((MAX(CASE WHEN Ranking = 1 THEN Unidades END) / SUM(Unidades)) * 100, 1), '%'),
             
-            -- AQUÍ ESTÁ EL CAMBIO: Añadimos '|' y IdArticu al final
             array_join(collect_list(
                 CASE 
                     WHEN Ranking > 1 
@@ -78,37 +80,33 @@ def sincronizar_desde_databricks(farmacia_id, fecha_inicio, fecha_fin):
         ORDER BY SUM(Unidades * (Mejor_Margen_Eur - Margen_Unit_Eur)) DESC
         """
         
-        cursor.execute(query)
-        rows = cursor.fetchall()
+        with databricks_connection() as (connection, cursor):
+            cursor.execute(query)
+            rows = cursor.fetchall()
         
-        cursor.close()
-        connection.close()
-
-        with transaction.atomic():
-            Oportunidad.objects.filter(farmacia_id=farmacia_id).delete()
-            objs = []
-            for row in rows:
-                margen_clean = float(row[4].replace('%', '')) if row[4] else 0
-                penet_clean = float(row[5].replace('%', '')) if row[5] else 0
-                ahorro_clean = float(str(row[7]).replace(',', '')) if row[7] else 0
-                # CN is at index 8
-                cn_clean = str(row[8]) if row[8] else ""
-                
-                objs.append(Oportunidad(
-                    farmacia_id=farmacia_id,
-                    grupo_homogeneo=row[0],
-                    producto_recomendado=row[1],
-                    pvp_medio=float(row[2]),
-                    puc_medio=float(row[3]),
-                    margen_pct=margen_clean,
-                    penetracion_pct=penet_clean,
-                    a_sustituir=row[6],
-                    ahorro_potencial=ahorro_clean,
-                    codigo_nacional=cn_clean # Map the new CN column
-                ))
-            Oportunidad.objects.bulk_create(objs)
+        # Procesar y crear objetos
+        objs = []
+        for row in rows:
+            margen_clean = parse_percentage_string(row[4])
+            penet_clean = parse_percentage_string(row[5])
+            ahorro_clean = parse_currency_string(row[7])
+            cn_clean = str(row[8]) if row[8] else ""
             
-        return len(objs), None
+            objs.append(Oportunidad(
+                farmacia_id=farmacia_id,
+                grupo_homogeneo=row[0],
+                producto_recomendado=row[1],
+                pvp_medio=float(row[2]),
+                puc_medio=float(row[3]),
+                margen_pct=margen_clean,
+                penetracion_pct=penet_clean,
+                a_sustituir=row[6],
+                ahorro_potencial=ahorro_clean,
+                codigo_nacional=cn_clean
+            ))
+        
+        num_created = bulk_create_or_update(Oportunidad, farmacia_id, objs)
+        return num_created, None
 
     except Exception as e:
         return 0, str(e)
@@ -116,34 +114,10 @@ def sincronizar_desde_databricks(farmacia_id, fecha_inicio, fecha_fin):
 def obtener_farmacias_cloud():
     """
     Obtiene la lista de farmacias ACTIVAS desde la tabla maestra de Databricks.
+    
+    Esta es un wrapper de la función genérica en db_utils para mantener compatibilidad.
+    
+    Returns:
+        tuple: (lista_farmacias, error_message)
     """
-    try:
-        connection = sql.connect(
-            server_hostname=os.getenv("DATABRICKS_SERVER_HOSTNAME"),
-            http_path=os.getenv("DATABRICKS_HTTP_PATH"),
-            access_token=os.getenv("DATABRICKS_TOKEN")
-        )
-        cursor = connection.cursor()
-        
-        # Consultamos la tabla maestra 'nom_farmacias'
-        # Filtramos por ACTIVO = 1 para traer solo las operativas
-        query = """
-            SELECT FARMACIA_NOM 
-            FROM cat_farma.datavaultperformance.nom_farmacias 
-            WHERE ACTIVO = 1 
-            ORDER BY FARMACIA_NOM
-        """
-        
-        cursor.execute(query)
-        rows = cursor.fetchall()
-        
-        cursor.close()
-        connection.close()
-        
-        # Convertimos la lista de tuplas [('HF...'), ...] en lista simple ['HF...', ...]
-        lista = [row[0] for row in rows]
-        return lista, None
-        
-    except Exception as e:
-        print(f"ERROR DATABRICKS (Farmacias): {str(e)}")
-        return [], str(e)
+    return get_farmacias_activas()
