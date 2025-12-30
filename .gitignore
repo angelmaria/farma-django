@@ -1,8 +1,19 @@
-# ignore sensitive and unnecessary files .env, etc
+# Archivos de entorno (secretos)
 .env
+
+# Archivos compilados de Python
 __pycache__/
 *.pyc
+
+# Base de datos local
 db.sqlite3
-# ignore entorno virtual .venv
+
+# Entornos virtuales (ponemos ambos nombres por si acaso)
 .venv/
+venv/
+
+# Archivos del sistema Mac
 .DS_Store
+
+# Archivos estáticos generados (NO SUBIR AL REPO)
+staticfiles/
