@@ -172,8 +172,9 @@ def entrenamiento(request):
         producto_final = item.producto_recomendado
         es_preferencia = False
 
-    # Extraer competidor "sucio"
-    marca_ask = item.grupo_homogeneo
+    # Extraer competidor "sucio" para la pregunta
+    marca_ask = item.grupo_homogeneo  # Default: pregunta sobre el grupo genérico
+    competidor_pregunta = None
     if item.a_sustituir:
         competidores = item.get_competidores_stats()
         if competidores:
@@ -181,6 +182,7 @@ def entrenamiento(request):
             for c in competidores:
                 if not c.get('es_campeon'):
                     marca_ask = c['nombre']
+                    competidor_pregunta = c  # Guardamos el competidor de la pregunta
                     break
 
     # Objeto modificado para la vista (fake attributes para simplificar template)
@@ -189,7 +191,8 @@ def entrenamiento(request):
     context = {
         'farmacia_activa': f_id,
         'item': item,
-        'marca_ask': marca_ask,
+        'marca_ask': marca_ask,  # Esto es lo que se pregunta (competidor o grupo genérico)
+        'competidor_pregunta': competidor_pregunta,  # Info del competidor preguntado (si aplica)
         'es_preferencia': es_preferencia,
         'active_tab': 'entrenamiento',
         'segmento': 'AH',
@@ -206,16 +209,16 @@ def examen(request):
     if 'reset' in request.GET or 'aciertos' not in request.session:
         request.session['aciertos'] = 0
         request.session['total'] = 0
+        if 'pregunta_actual' in request.session:
+            del request.session['pregunta_actual']
         if 'reset' in request.GET:
             return redirect('examen')
 
-    mensaje = None
-    es_correcto = None
-
-    # 2. Procesar respuesta (POST)
-    if request.method == 'POST':
+    # 2. Procesar respuesta (POST) - Mostrar análisis del error
+    if request.method == 'POST' and 'opcion' in request.POST:
         elegido = request.POST.get('opcion')
         correcto = request.POST.get('correcto')
+        pregunta = request.POST.get('pregunta')
         
         if elegido and correcto:
             request.session['total'] += 1 
@@ -224,13 +227,29 @@ def examen(request):
                 mensaje = "¡Correcto! Has elegido la opción más rentable del grupo."
                 es_correcto = True
             else:
-                mensaje = f"Incorrecto. Dentro de este grupo, la opción óptima es {correcto}"
+                mensaje = f"Incorrecto. El paciente pide: {pregunta}. Tú elegiste: {elegido}. La opción óptima es: {correcto}"
                 es_correcto = False
+            
+            # Mostrar análisis inmediatamente
+            context = {
+                'farmacia_activa': f_id,
+                'mensaje': mensaje,
+                'es_correcto': es_correcto,
+                'marca_ask': pregunta,
+                'seleccion_usuario': elegido,
+                'respuesta_correcta': correcto,
+                'aciertos': request.session['aciertos'],
+                'total': request.session['total'],
+                'mostrar_analisis_solo': True,  # Flag para mostrar SOLO análisis
+                'finalizado': False,
+                'active_tab': 'examen',
+                'segmento': 'AH'
+            }
+            return render(request, 'core/examen.html', context)
 
     # 3. Game Over
     if request.session['total'] >= MAX_PREGUNTAS and request.method == 'GET':
         score = (request.session['aciertos'] / MAX_PREGUNTAS) * 100
-        # ... (Tu lógica de feedback igual que antes) ...
         if score == 100: feedback = "¡Increíble! Eres un maestro de la sustitución."
         elif score >= 50: feedback = "Bien, pero sigue practicando."
         else: feedback = "Necesitas repasar."
@@ -246,11 +265,9 @@ def examen(request):
         }
         return render(request, 'core/examen.html', context)
     
-    # 4. GENERAR NUEVA PREGUNTA (Lógica Mejorada)
+    # 4. GENERAR NUEVA PREGUNTA (Solo en GET, no en POST)
     items_qs = Oportunidad.objects.filter(farmacia_id=f_id)
     
-    # Intentamos buscar una pregunta válida (que tenga competencia)
-    # Hacemos hasta 10 intentos para no bloquear el servidor si todo son monopolios
     item_valido = None
     distractores_reales = []
     respuesta_correcta = ""
@@ -258,9 +275,8 @@ def examen(request):
 
     for _ in range(10): 
         posible_item = items_qs.order_by('?').first()
-        if not posible_item: break # No hay datos
+        if not posible_item: break
 
-        # Determinamos la respuesta correcta (Preferencia o Recomendado)
         try:
             pref = Preferencia.objects.get(
                 grupo_homogeneo=posible_item.grupo_homogeneo,
@@ -273,35 +289,25 @@ def examen(request):
             respuesta_correcta = posible_item.producto_recomendado
             origen = "Algoritmo"
 
-        # BÚSQUEDA DE DISTRACTORES (Rivales del MISMO grupo)
-        # Usamos el método que ya tienes programado en models.py
         competencia_stats = posible_item.get_competidores_stats()
         
-        # Filtramos: Queremos nombres que NO sean la respuesta correcta
-        # competencia_stats devuelve una lista de dicts: [{'nombre': 'Cinfa', ...}, ...]
-        # Use set() to remove potential duplicates immediately
         posibles_rivales = list(set([
             c['nombre'] for c in competencia_stats 
             if c['nombre'].strip().upper() != respuesta_correcta.strip().upper()
         ]))
 
-        # Si hay al menos 1 rival, la pregunta es válida (será A vs B)
         if posibles_rivales:
             item_valido = posible_item
-            # Take up to 2 random rivals (if only 1 exists, take 1)
             num_distractores = min(len(posibles_rivales), 2)
             distractores_reales = random.sample(posibles_rivales, num_distractores)
             break
     
-    # Si tras 10 intentos no encontramos nada (muy raro), mostramos error o fallback
     if not item_valido:
         return render(request, 'core/dashboard.html', {'active_tab': 'dashboard', 'segmento': 'AH'})
 
-    # Montamos las opciones finales
     opciones = distractores_reales + [respuesta_correcta]
     random.shuffle(opciones)
 
-    # Marca para el título (nombre del grupo homogéneo)
     marca_ask = item_valido.grupo_homogeneo
 
     context = {
@@ -310,11 +316,10 @@ def examen(request):
         'marca_ask': marca_ask,
         'opciones': opciones,
         'respuesta_correcta': respuesta_correcta,
-        'mensaje': mensaje,
-        'es_correcto': es_correcto,
         'aciertos': request.session['aciertos'],
         'total': request.session['total'],
         'origen': origen,
+        'mostrar_analisis_solo': False,
         'finalizado': False,
         'active_tab': 'examen',
         'segmento': 'AH'

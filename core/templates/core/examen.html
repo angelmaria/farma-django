@@ -45,27 +45,25 @@
             <h4 class="alert-heading">{% if es_correcto %}🎉 ¡Bien hecho!{% else %}❌ Vaya...{% endif %}</h4>
             <p class="fs-5">{{ mensaje }}</p>
             
-            {% if not es_correcto %}
+            {% if not es_correcto and mostrar_analisis_solo %}
                 <hr>
                 <div class="text-start d-inline-block">
                     <p class="mb-1"><i class="fas fa-info-circle"></i> Análisis:</p>
                     <ul class="mb-0">
                         <li>El paciente pedía: <strong>{{ marca_ask }}</strong></li>
-                        <li>Tu elección: <span class="text-decoration-line-through">{{ seleccion_usuario }}</span></li>
+                        <li>Tú elegiste: <span class="text-decoration-line-through">{{ seleccion_usuario }}</span></li>
                         <li>Opción más rentable: <strong>{{ respuesta_correcta }}</strong> 🏆</li>
                     </ul>
                 </div>
             {% endif %}
             
             <div class="mt-4">
-                <div class="mt-4">
-                    <a href="." class="btn {% if es_correcto %}btn-success{% else %}btn-danger{% endif %} btn-lg px-5">
-                        Siguiente Pregunta <i class="fas fa-arrow-right ms-2"></i>
-                    </a>
-                </div>
+                <a href="." class="btn {% if es_correcto %}btn-success{% else %}btn-danger{% endif %} btn-lg px-5">
+                    Siguiente Pregunta <i class="fas fa-arrow-right ms-2"></i>
+                </a>
             </div>
         </div>
-    
+
     {% else %}
 
     <div class="card shadow-lg border-0">
@@ -92,6 +90,7 @@
             <form method="post">
                 {% csrf_token %}
                 <input type="hidden" name="correcto" value="{{ respuesta_correcta }}">
+                <input type="hidden" name="pregunta" value="{{ marca_ask }}">
                 
                 <div class="d-grid gap-3">
                     {% for opcion in opciones %}

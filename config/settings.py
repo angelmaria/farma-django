@@ -121,6 +121,10 @@ USE_I18N = True
 
 USE_TZ = True
 
+# --- ENCODING UTF-8 ---
+FILE_CHARSET = 'utf-8'
+DEFAULT_CHARSET = 'utf-8'
+
 # --- CONFIGURACIÓN DE FORMATO NUMÉRICO ---
 USE_L10N = False  # <--- IMPORTANTE: Poner a False para forzar tu configuración
 USE_THOUSAND_SEPARATOR = True

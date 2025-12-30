@@ -32,7 +32,18 @@
                         <div class="badge bg-white text-success border border-success fs-5 p-2 rounded-pill mb-3">
                             Margen: {{ item.margen_pct }}%
                         </div>
-                        <p class="small text-muted mb-0">{{ item.grupo_homogeneo }}</p>
+                        
+                        <!-- Mostrar el análisis solo si la pregunta fue sobre un competidor específico -->
+                        {% if competidor_pregunta %}
+                            <hr class="my-2">
+                            <p class="small text-muted mb-2"><strong>Análisis:</strong></p>
+                            <ul class="small text-muted text-start" style="font-size: 0.75rem;">
+                                <li>El paciente pedía: <strong>{{ competidor_pregunta.nombre }}</strong></li>
+                                <li>Opción más rentable: <strong>{{ item.producto_recomendado }}</strong></li>
+                            </ul>
+                        {% else %}
+                            <p class="small text-muted mb-0">{{ item.grupo_homogeneo }}</p>
+                        {% endif %}
                     </div>
                 </div>
             </div>

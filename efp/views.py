@@ -187,23 +187,25 @@ def examen(request):
     f_id = request.session.get('farmacia_activa', 'HF280050001')
     MAX_PREGUNTAS = 10 
 
-    # 1. Inicialización / Reset
+    # 1. Reset
     if 'reset' in request.GET or 'efp_stats' not in request.session:
-        request.session['efp_stats'] = {'aciertos': 0, 'total': 0, 'finalizado': False}
-        if 'pregunta_actual' in request.session:
-            del request.session['pregunta_actual']
+        request.session['efp_stats'] = {'aciertos': 0, 'total': 0}
+        request.session.pop('pregunta_actual', None)
+        request.session.pop('resultado_pendiente', None)
+        request.session.modified = True
         if 'reset' in request.GET:
             return redirect('efp_examen')
 
-    stats = request.session['efp_stats']
+    stats = request.session.get('efp_stats', {'aciertos': 0, 'total': 0})
 
-    # 2. Control de Fin de Juego
+    # 2. Verificar fin de examen
     if stats['total'] >= MAX_PREGUNTAS:
-        score = (stats['aciertos'] / MAX_PREGUNTAS) * 100
+        score = (stats['aciertos'] / MAX_PREGUNTAS * 100) if stats['total'] > 0 else 0
         if score == 100: feedback_text = "¡Eres un experto en Venta Libre! 🌟"
         elif score >= 50: feedback_text = "Buen trabajo, sigue practicando. 💪"
         else: feedback_text = "Revisa los márgenes y grupos de las EFP. ¡Ánimo! 📚"
         
+        request.session.pop('resultado_pendiente', None)
         context = {
             'finalizado': True,
             'aciertos': stats['aciertos'],
@@ -215,40 +217,31 @@ def examen(request):
         }
         return render(request, 'efp/examen.html', context)
 
-    # 3. Lógica "Siguiente Pregunta" (Resetear estado para nueva ronda)
-    if request.method == 'POST' and 'siguiente_pregunta' in request.POST:
-        if 'pregunta_actual' in request.session:
-            del request.session['pregunta_actual']
-        return redirect('efp_examen')
+    # 3. Si hay resultado pendiente, mostrarlo y borrarlo
+    resultado_pendiente = request.session.pop('resultado_pendiente', None)
+    if resultado_pendiente:
+        # También borra pregunta actual para que genere una nueva en el siguiente GET
+        request.session.pop('pregunta_actual', None)
+        request.session.modified = True
+        context = resultado_pendiente
+        return render(request, 'efp/examen.html', context)
 
-    # 4. Generación de Pregunta (Si no existe una activa)
-    if 'pregunta_actual' not in request.session:
-        nueva_pregunta = generar_pregunta_examen(f_id)
-        if not nueva_pregunta:
-            # Caso borde: No hay suficientes datos en la farmacia
-            return render(request, 'efp/examen.html', {
-                'error': "No hay suficientes datos de EFP para generar un examen. Sincroniza datos primero.",
-                'active_tab': 'examen'
-            })
-        request.session['pregunta_actual'] = nueva_pregunta
-
-    pregunta_data = request.session['pregunta_actual']
-    
-    # Variables de contexto por defecto (Modo: Esperando respuesta)
-    mostrar_feedback = False
-    es_correcto = False
-    seleccion_usuario = None
-    mensaje = ""
-
-    # 5. Procesar Respuesta (POST)
+    # 4. Procesar respuesta del usuario
     if request.method == 'POST' and 'opcion' in request.POST:
-        seleccion_usuario = request.POST.get('opcion')
-        correcto = pregunta_data['producto_correcto']
-        mostrar_feedback = True # ¡Esto activa el modo revisión en el template!
-        
-        # Verificamos si ya se había contestado esta pregunta en esta sesión para no sumar doble
-        # (Usamos un flag temporal en session o simplemente confiamos en el flujo)
-        if 'pregunta_respondida_id' not in request.session or request.session['pregunta_respondida_id'] != pregunta_data['id_pregunta']:
+        pregunta_data = request.session.get('pregunta_actual')
+        if pregunta_data:
+            seleccion_usuario = request.POST.get('opcion')
+            correcto = pregunta_data.get('producto_correcto')
+            pregunta_texto = request.POST.get('pregunta_texto', pregunta_data.get('pregunta_texto', 'medicina'))
+            
+            # Asegurar encoding UTF-8
+            if isinstance(seleccion_usuario, bytes):
+                seleccion_usuario = seleccion_usuario.decode('utf-8')
+            if isinstance(correcto, bytes):
+                correcto = correcto.decode('utf-8')
+            if isinstance(pregunta_texto, bytes):
+                pregunta_texto = pregunta_texto.decode('utf-8')
+            
             stats['total'] += 1
             if seleccion_usuario == correcto:
                 stats['aciertos'] += 1
@@ -256,25 +249,66 @@ def examen(request):
                 mensaje = "¡Correcto! Es la opción adecuada para este grupo."
             else:
                 es_correcto = False
-                mensaje = f"Incorrecto. {pregunta_data['explicacion']}"
+                mensaje = f"Incorrecto. El paciente pide: {pregunta_texto}. Tú elegiste: {seleccion_usuario}. La opción óptima es: {correcto}"
             
-            # Actualizamos sesión y marcamos como respondida
             request.session['efp_stats'] = stats
-            request.session['pregunta_respondida_id'] = pregunta_data['id_pregunta']
-        else:
-            # Si el usuario refresca la página de resultado, recuperamos el estado anterior
-            es_correcto = (seleccion_usuario == correcto)
-            mensaje = "Ya respondiste a esta pregunta."
+            request.session.pop('pregunta_actual', None)  # Borra pregunta actual para generar nueva
+            
+            # Guardar resultado para mostrar en siguiente render
+            request.session['resultado_pendiente'] = {
+                'pregunta': pregunta_data,
+                'mensaje': mensaje,
+                'es_correcto': es_correcto,
+                'seleccion_usuario': seleccion_usuario,
+                'aciertos': stats['aciertos'],
+                'total_jugado': stats['total'],
+                'total_max': MAX_PREGUNTAS,
+                'mostrar_feedback_solo': True,
+                'active_tab': 'examen',
+                'segmento': 'EFP',
+                'finalizado': False
+            }
+            request.session.modified = True
+            
+            # Redirect a GET para que procese resultado_pendiente
+            return redirect('efp_examen')
 
-    # 6. Renderizar
+    # 5. Generar nueva pregunta
+    pregunta_data = request.session.get('pregunta_actual')
+    if not pregunta_data:
+        nueva_pregunta = generar_pregunta_examen(f_id)
+        if not nueva_pregunta:
+            # Se acabaron preguntas: fuerza fin de examen
+            stats['total'] = MAX_PREGUNTAS
+            request.session['efp_stats'] = stats
+            request.session.modified = True
+            
+            score = (stats['aciertos'] / MAX_PREGUNTAS * 100)
+            if score == 100: feedback_text = "¡Eres un experto en Venta Libre! 🌟"
+            elif score >= 50: feedback_text = "Buen trabajo, sigue practicando. 💪"
+            else: feedback_text = "Revisa los márgenes y grupos de las EFP. ¡Ánimo! 📚"
+            
+            context = {
+                'finalizado': True,
+                'aciertos': stats['aciertos'],
+                'total': stats['total'],
+                'score': score,
+                'feedback': feedback_text,
+                'active_tab': 'examen',
+                'segmento': 'EFP',
+            }
+            return render(request, 'efp/examen.html', context)
+        
+        request.session['pregunta_actual'] = nueva_pregunta
+        request.session.modified = True
+        pregunta_data = nueva_pregunta
+
+    # 6. Mostrar pregunta normal
     context = {
         'pregunta': pregunta_data,
-        'mostrar_feedback': mostrar_feedback,
-        'es_correcto': es_correcto,
-        'seleccion_usuario': seleccion_usuario,
-        'mensaje': mensaje,
+        'mostrar_feedback_solo': False,
         'aciertos': stats['aciertos'],
-        'total_jugado': stats['total'], # Preguntas respondidas hasta ahora
+        'total_jugado': stats['total'],
         'total_max': MAX_PREGUNTAS,
         'active_tab': 'examen',
         'segmento': 'EFP',
