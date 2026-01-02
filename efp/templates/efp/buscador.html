@@ -34,7 +34,14 @@
                 </div>
             </div>
             <div class="alert alert-warning mt-3 mb-0 py-2">
-                <small><i class="fas fa-exclamation-triangle"></i> <strong>Sustituye a:</strong> {{ row.a_sustituir|truncatechars:100 }}</small>
+                <small><i class="fas fa-exclamation-triangle"></i> <strong>Sustituye a:</strong></small>
+                <div class="mt-1 small text-muted">
+                    {% for comp in row.get_competidores_stats %}
+                        {% if not comp.es_campeon %}
+                            <span class="badge bg-light text-dark border me-1 mb-1">{{ comp.nombre }}</span>
+                        {% endif %}
+                    {% endfor %}
+                </div>
             </div>
         </div>
     </div>

@@ -128,6 +128,12 @@
                                     title="Código Nacional">
                                     CN: {{ item.codigo_nacional|default:"---" }}
                                 </span>
+                                
+                                <span class="badge bg-light text-muted border ms-1 align-middle" 
+                                    style="font-size: 0.7em; opacity: 0.85;"
+                                    title="Precio Venta Público">
+                                    €{{ item.pvp_medio|floatformat:2 }}
+                                </span>
                             </div>
                         </div>
                     </div>

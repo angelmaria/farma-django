@@ -54,39 +54,60 @@ class CompetidoresStatsMixin:
         total_competencia = 0
         parsed_items = []
         
-        # Regex para (Unidades|Margen%|CN)
-        regex_nuevo = r'\((\d+)\|(\d+)%\|(\d+)\)$'
-        regex_viejo = r'\((\d+)\|(\d+)%\)$'
+        # Regex para diferentes formatos:
+        # (Unidades|Margen%|CN|PVP) - formato extendido con precio
+        # (Unidades|Margen%|CN) - formato con CN
+        # (Unidades|Margen%) - formato básico
+        regex_extendido = r'\((\d+)\|(\d+)%\|(\d+)\|([\d.]+)\)$'
+        regex_con_cn = r'\((\d+)\|(\d+)%\|(\d+)\)$'
+        regex_basico = r'\((\d+)\|(\d+)%\)$'
         
         for item in items:
             item = item.strip()
             if not item:
                 continue
                 
-            match_new = re.search(regex_nuevo, item)
-            match_old = re.search(regex_viejo, item)
+            match_ext = re.search(regex_extendido, item)
+            match_cn = re.search(regex_con_cn, item)
+            match_basic = re.search(regex_basico, item)
             
-            if match_new:
-                unidades = int(match_new.group(1))
-                margen = int(match_new.group(2))
-                cn = match_new.group(3)
+            if match_ext:
+                unidades = int(match_ext.group(1))
+                margen = int(match_ext.group(2))
+                cn = match_ext.group(3)
+                pvp = float(match_ext.group(4))
                 nombre = item.split('(')[0].strip()
                 parsed_items.append({
                     'nombre': nombre,
                     'unidades': unidades,
                     'margen': margen,
-                    'cn': cn
+                    'cn': cn,
+                    'pvp': pvp
                 })
                 total_competencia += unidades
-            elif match_old:
-                unidades = int(match_old.group(1))
-                margen = int(match_old.group(2))
+            elif match_cn:
+                unidades = int(match_cn.group(1))
+                margen = int(match_cn.group(2))
+                cn = match_cn.group(3)
                 nombre = item.split('(')[0].strip()
                 parsed_items.append({
                     'nombre': nombre,
                     'unidades': unidades,
                     'margen': margen,
-                    'cn': ''
+                    'cn': cn,
+                    'pvp': None
+                })
+                total_competencia += unidades
+            elif match_basic:
+                unidades = int(match_basic.group(1))
+                margen = int(match_basic.group(2))
+                nombre = item.split('(')[0].strip()
+                parsed_items.append({
+                    'nombre': nombre,
+                    'unidades': unidades,
+                    'margen': margen,
+                    'cn': '',
+                    'pvp': None
                 })
                 total_competencia += unidades
         
@@ -111,7 +132,8 @@ class CompetidoresStatsMixin:
                 'penet': f"{penet_campeon:.2f}",
                 'margen': float(self.margen_pct) if hasattr(self, 'margen_pct') else 0,
                 'es_campeon': True,
-                'cn': getattr(self, 'codigo_nacional', '')
+                'cn': getattr(self, 'codigo_nacional', ''),
+                'pvp': float(self.pvp_medio) if hasattr(self, 'pvp_medio') else None
             })
             
             # Agregar competidores
@@ -122,7 +144,8 @@ class CompetidoresStatsMixin:
                     'penet': f"{penet_comp:.2f}",
                     'margen': p['margen'],
                     'es_campeon': False,
-                    'cn': p['cn']
+                    'cn': p['cn'],
+                    'pvp': p.get('pvp')
                 })
         
         return stats

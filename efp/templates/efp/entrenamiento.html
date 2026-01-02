@@ -84,6 +84,7 @@
                                         <div class="fw-bold text-dark small text-truncate" title="{{ comp.nombre }}">{{ comp.nombre }}</div>
                                         <div class="text-muted x-small font-monospace">
                                             {% if comp.cn %}CN: {{ comp.cn }}{% endif %}
+                                            {% if comp.pvp %}<span class="ms-2 opacity-75">| €{{ comp.pvp|floatformat:2 }}</span>{% endif %}
                                         </div>
                                     </div>
                                     
